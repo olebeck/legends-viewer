@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>threejs Minecraft Legends Viewer</title>
+		<style>
+			body {
+                margin: 0; 
+                font-family: Arial, sans-serif;
+            }
+            *[drop-active=true] {
+                filter: blur(3px);
+            }
+		</style>
+        <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+        <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+        <script>
+            function pop(text, duration=3000) {
+                Toastify({
+                    text,
+                    duration,
+                    oldestFirst: false
+                }).showToast();
+            }
+        </script>
+	</head>
+	<body>
+        <script src="zip.js"></script>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://threejs.org/build/three.module.js",
+                    "three/addons/": "https://threejs.org/examples/jsm/",
+                    "dat.gui": "https://unpkg.com/dat.gui@0.7.9/build/dat.gui.module.js"
+				}
+			}
+		</script>
+        <script type="module" defer>
+            import * as THREE from 'three'; 
+            import { GUI } from 'dat.gui'
+            import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+            import { LightProbeHelper } from 'three/addons/helpers/LightProbeHelper.js';
+			import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
+
+            import { ZipLoadingManager } from './ziploader.js';
+            import { LegendsModelLoader } from './loader.js';
+
+            const scene = new THREE.Scene();
+            window.scene = scene;
+            const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+            const renderer = new THREE.WebGLRenderer({
+                antialias: true,
+            });
+            window.renderer = renderer;
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            document.body.appendChild( renderer.domElement );
+
+            renderer.domElement.addEventListener("dragover", (ev) => {
+                ev.target.setAttribute("drop-active", true);
+                ev.preventDefault();
+            });
+
+            renderer.domElement.addEventListener("dragleave", (ev) => {
+                ev.target.setAttribute("drop-active", false);
+                ev.preventDefault();
+            });
+
+
+            const controls = new OrbitControls( camera, renderer.domElement );
+            camera.position.set( 0, 3, 4 );
+            controls.update();
+
+            //const pack_name = "Mount Beetle RG 01 ppack0.mcpack";
+            //const model_name = "models/entity/mount_beetle_rg_01";
+
+            const gui = new GUI();
+            gui.width += 150;
+            const params = {"model": null};
+            let mgui;
+            let mcpackLoadingManager;
+
+            const scene_meshes = new THREE.Group();
+            scene.add(scene_meshes);
+            async function load_model(zipfile, model_name) {
+                scene_meshes.clear();
+                mcpackLoadingManager.Load(function() {
+                    const loader = new LegendsModelLoader(mcpackLoadingManager);
+                    loader.load(model_name, function ( legend ) {
+                        for(const mesh of legend.meshes) {
+                            scene_meshes.add(mesh);
+                        }
+                    });
+                });
+            }
+
+            async function load_blob(blob) {
+                const zr = new zip.ZipReader(new zip.BlobReader(blob));
+                const entries = await zr.getEntries();
+                const model_filenames = entries.filter(e => e.filename.startsWith("models/")).map(e => e.filename.split(".")[0]);
+                if(model_filenames.length == 0) {
+                    pop("This mcpack doesnt have any models!");
+                    return;
+                }
+
+                mcpackLoadingManager = new ZipLoadingManager(zr);
+                params.model = model_filenames[0];
+                if(mgui) mgui.remove();
+
+                function onChange() {
+                    load_model(zr, params.model);
+                }
+
+                mgui = gui.add( params, "model", model_filenames);
+                mgui.onChange(onChange);
+                onChange();
+            }
+
+            async function load_mcpack_file(filename) {
+                const resp = await fetch(filename);
+                await load_blob(await resp.blob());
+            }
+
+            const pack_name = "Hero Ranger DL 02 ppack0.mcpack";
+            load_mcpack_file(pack_name);
+
+            // skybox
+            const cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256 );
+            const cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
+            const lightProbe = new THREE.LightProbe();
+            scene.add( lightProbe );
+
+            new THREE.CubeTextureLoader().load( [1,3,4,5,0,2].map(e => `panorama/panorama_${e}.png`), function ( cubeTexture ) {
+                scene.background = cubeTexture;
+                cubeCamera.update( renderer, scene );
+                lightProbe.copy( LightProbeGenerator.fromCubeRenderTarget( renderer, cubeRenderTarget ) );
+            } );
+
+
+            function render() {
+                controls.update();
+                renderer.render( scene, camera );
+            }
+
+            window.addEventListener( 'resize', onWindowResize, false );
+            function onWindowResize(){
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+            }
+
+
+            function drop(ev) {
+                ev.preventDefault();
+                ev.target.setAttribute("drop-active", false);
+                const file = ev.dataTransfer.files[0];
+                load_blob(file);
+            }
+            renderer.domElement.addEventListener("drop", drop);
+
+            window.addEventListener("message", (m) => {
+                console.log(m.data);
+                if(m.data.load_blob) {
+                    load_blob(m.data.load_blob);
+                }
+            })
+            if(opener) {
+                opener.legends_viewer = window;
+                opener.postMessage("loaded");
+            }
+
+            function animate() {
+                requestAnimationFrame( animate );
+                render();
+            }
+            animate();
+
+        </script>
+	</body>
+</html>
