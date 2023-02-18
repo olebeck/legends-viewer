@@ -6,7 +6,7 @@ export class ZipLoadingManager extends THREE.LoadingManager {
         this.zr = zr;
         this.setURLModifier((url) => {
             const e = this.entries.get(url);
-            if(!e) throw `${url} not found`;
+            if(!e) return `${url} not found`;
             return e;
         });
     }
@@ -22,7 +22,7 @@ export class ZipLoadingManager extends THREE.LoadingManager {
                     mime = "image/png";
                     break;
                 }
-                const url =  URL.createObjectURL(await entry.getData(new zip.BlobWriter(mime)));
+                const url = URL.createObjectURL(await entry.getData(new zip.BlobWriter(mime)));
                 this.entries.set(entry.filename, url);
             }
         }

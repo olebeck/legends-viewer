@@ -34,12 +34,11 @@ class LegendsMaterialLoader extends THREE.Loader {
             const jm = json[key];
             const materialBase = key.split(":")[1];
 
-            const material = new THREE.MeshBasicMaterial({
+            const material = new THREE.MeshStandardMaterial({
                 color: 0xaaeeff,
                 side: THREE.DoubleSide,
                 transparent: true,
-                depthFunc: THREE.LessDepth,
-                depthWrite: true,
+                alphaTest: 0.0001,
             });
 
             const shaderFunc = legendsShaders[materialBase];
@@ -61,6 +60,7 @@ class LegendsMaterialLoader extends THREE.Loader {
                         texture.minFilter = THREE.NearestFilter;
                         material[type] = texture;
                     }, null, (err) => {
+                        console.error(err);
                         loader.load( jm.textures[jt]+".hdr", (texture) => {
                             texture.magFilter = THREE.NearestFilter;
                             texture.minFilter = THREE.NearestFilter;
@@ -125,10 +125,11 @@ export class LegendsModelLoader extends THREE.Loader {
             const uv = new Float32Array(jm.uv_sets[0].map(e => [e[0], 1-e[1]]).flat());
 
             geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
-			geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
+			//geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
             geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
-            geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( uv, 2 ) );
+            geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( vertices, 3 ) );
             geometry.setIndex(jm.triangles);
+            geometry.computeVertexNormals();
 
             const mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }) );
 
