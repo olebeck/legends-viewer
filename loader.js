@@ -1,22 +1,39 @@
 import * as THREE from 'three'; 
 
-const legendsShaders = {
-    "base_entity_hero_face": (shader) => {
-        shader.vertexShader = shader.vertexShader.replace(
-        '#include <uv_vertex>',
-        `
-            #include <uv_vertex>
-            #ifdef USE_UV
-            vUv /= vec2(9,3);
-            #endif
-        `
-      )
-    }
-}
-
 class LegendsMaterialLoader extends THREE.Loader {
     constructor( manager ) {
         super( manager );
+        this.face_poses = null;
+    }
+
+    setFacePoses(face_poses) {
+        console.log({face_poses});
+        this.face_poses = face_poses;
+    }
+
+    shader_face_poses(shader, height) {
+        let x = 1, y = 1;
+        switch (this.face_poses.length) {
+            case 18:
+                x = 9; y = 3;
+                break;
+            case 9:
+                x = 18; y = height/16;
+            case 3:
+                x = 3; y = height/12;
+                break;
+            case 2:
+                x = 2; y = height/16;
+        }
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <uv_vertex>',
+            `
+                #include <uv_vertex>
+                #ifdef USE_UV
+                vUv /= vec2(${x},${y});
+                #endif
+            `
+        )
     }
 
     load(filename, onLoad, onProgress, onError) {
@@ -27,9 +44,8 @@ class LegendsMaterialLoader extends THREE.Loader {
 		loader.setRequestHeader( this.requestHeader );
 		loader.setWithCredentials( this.withCredentials );
         loader.setResponseType("json");
-		loader.load( `${filename}.json`, function ( json ) {
-            const s = filename.split("/");
-            const name = s[s.length-1];
+		loader.load( filename, function ( json ) {
+            const name = filename.split("/").at(-1).split(".").at(0);
             const key = Object.keys(json).find(e => e.split(":")[0] == name);
             const jm = json[key];
             const materialBase = key.split(":")[1];
@@ -41,9 +57,11 @@ class LegendsMaterialLoader extends THREE.Loader {
                 alphaTest: 0.0001,
             });
 
-            const shaderFunc = legendsShaders[materialBase];
-            if(shaderFunc) {
-                material.onBeforeCompile = shaderFunc;
+            let height = 0;
+
+            if(["base_entity_hero_face", "base_entity_face"].includes(materialBase)) {
+                material.onBeforeCompile = (shader) => scope.shader_face_poses(shader, height);
+                material.customProgramCacheKey = () => {return `shader_face_poses ${scope.face_poses.length}`}
             }
 
             const types = {"diffuseMap": "map", "coeffMap": null, "normalMap": "normalMap", "emissiveMap": "emissiveMap"};
@@ -59,12 +77,14 @@ class LegendsMaterialLoader extends THREE.Loader {
                         texture.magFilter = THREE.NearestFilter;
                         texture.minFilter = THREE.NearestFilter;
                         material[type] = texture;
+                        height = texture.image.height;
                     }, null, (err) => {
                         console.error(err);
                         loader.load( jm.textures[jt]+".hdr", (texture) => {
                             texture.magFilter = THREE.NearestFilter;
                             texture.minFilter = THREE.NearestFilter;
                             material[type] = texture;
+                            height = texture.image.height;
                         });
                     });
                 }
@@ -78,15 +98,17 @@ class LegendsMaterialLoader extends THREE.Loader {
 export class LegendsModelLoader extends THREE.Loader {
     constructor( manager ) {
         super( manager );
+        this.materials = new Map();
+        this.materialLoader = null;
     }
 
-    load( name, onLoad, onProgress, onError ) {
+    load( url, onLoad, onProgress, onError ) {
 		const scope = this;
 		const loader = new THREE.FileLoader( this.manager );
 		loader.setPath( this.path );
 		loader.setRequestHeader( this.requestHeader );
 		loader.setWithCredentials( this.withCredentials );
-		loader.load( `${name}.model.json`, function ( text ) {
+		loader.load( url, function ( text ) {
 			try {
 				onLoad( scope.parse( text ) );
 			} catch ( e ) {
@@ -95,27 +117,32 @@ export class LegendsModelLoader extends THREE.Loader {
 				} else {
 					console.error( e );
 				}
-				scope.manager.itemError( name );
+				scope.manager.itemError( url );
 			}
 		}, onProgress, onError );
 	}
 
-    parse( data ) {
-        const materialLoader = new LegendsMaterialLoader( this.manager );
-        materialLoader.setPath( this.path );
+    addMaterial(name, material) {
+        this.materials.set(name, material);
+    }
 
-        const ret = {
-            meshes: [],
-        };
+    setMaterialLoader(materialLoader) {
+        this.materialLoader = materialLoader;
+    }
+
+    parse( data ) {
+        const scope = this;
+
+        if(!this.materialLoader) {
+            this.materialLoader = new LegendsMaterialLoader( this.manager );
+            this.materialLoader.setPath( this.path );
+        }
+
+        const ret = [];
 
         const json = JSON.parse( data );
         const geometries = json["minecraft:geometry"];
         window.geometry = geometries;
-
-        const group = new THREE.Group();
-        window.model = group;
-        
-        const materials = new Map();
 
         for(const jm of geometries[0].meshes) {
             const geometry = new THREE.BufferGeometry();
@@ -133,20 +160,73 @@ export class LegendsModelLoader extends THREE.Loader {
 
             const mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }) );
 
-            if(materials.has(jm.meta_material)) {
-                mesh.material = materials.get(jm.meta_material);
+            if(this.materials.has(jm.meta_material)) {
+                mesh.material = this.materials.get(jm.meta_material);
             } else {
-                materialLoader.load(`materials/meta_materials/${jm.meta_material}`, function (material) {
-                    materials.set(jm.meta_material, material);
+                this.materialLoader.load(`materials/meta_materials/${jm.meta_material}.json`, function (material) {
+                    scope.materials.set(jm.meta_material, material);
                     mesh.material = material;
                 });
             }
 
-            group.add(mesh);
+            ret.push(mesh);
         }
-        
-        ret.meshes.push(group);
 
         return ret;
+    }
+}
+
+
+class LegendsEntity extends THREE.Object3D {
+    constructor(json, model) {
+        super();
+        this.json = json;
+        for(const mesh of model) {
+            this.add(mesh);
+        }
+    }
+}
+
+
+export class LegendsEntityLoader extends THREE.Loader {
+    constructor(manager) {
+        super(manager);
+    }
+
+    load( url, onLoad, onProgress, onError ) {
+		const scope = this;
+		const loader = new THREE.FileLoader( this.manager );
+		loader.setPath( this.path );
+		loader.setRequestHeader( this.requestHeader );
+		loader.setWithCredentials( this.withCredentials );
+		loader.load( url, async function ( text ) {
+			try {
+				onLoad( await scope.parse( text ) );
+			} catch ( e ) {
+				if ( onError ) {
+					onError( e );
+				} else {
+					console.error( e );
+				}
+				scope.manager.itemError( url );
+			}
+		}, onProgress, onError );
+	}
+
+    async parse( text ) {
+        const json = JSON.parse( text );
+        const entity = json["minecraft:client_entity"];
+        const geometry_name = entity.description.geometry.default.split(".").at(-1);
+ 
+        const modelLoader = new LegendsModelLoader( this.manager );
+        const materialLoader = new LegendsMaterialLoader( this.manager );
+        if(entity.description.face_poses) {
+            materialLoader.setFacePoses(entity.description.face_poses);
+        }
+        modelLoader.setMaterialLoader(materialLoader);
+
+        const model = await modelLoader.loadAsync(`models/entity/${geometry_name}.model.json`);
+        const legendsEntity = new LegendsEntity(entity, model);
+        return legendsEntity
     }
 }

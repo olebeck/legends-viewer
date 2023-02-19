@@ -41,78 +41,53 @@
             import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
             import { LightProbeHelper } from 'three/addons/helpers/LightProbeHelper.js';
 			import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
+            import { GroundProjectedEnv } from 'three/addons/objects/GroundProjectedEnv.js';
+
+            import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+			import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 
             import { ZipLoadingManager } from './ziploader.js';
-            import { LegendsModelLoader } from './loader.js';
+            import { LegendsEntityLoader } from './loader.js';
 
-            const scene = new THREE.Scene();
-            window.scene = scene;
-            const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-
-            const renderer = new THREE.WebGLRenderer({
-                antialias: true,
-            });
-            window.renderer = renderer;
-            renderer.setSize( window.innerWidth, window.innerHeight );
-            document.body.appendChild( renderer.domElement );
-
-            renderer.domElement.addEventListener("dragover", (ev) => {
-                ev.target.setAttribute("drop-active", true);
-                ev.preventDefault();
-            });
-
-            renderer.domElement.addEventListener("dragleave", (ev) => {
-                ev.target.setAttribute("drop-active", false);
-                ev.preventDefault();
-            });
-
-
-            const controls = new OrbitControls( camera, renderer.domElement );
-            camera.position.set( 0, 3, 4 );
-            controls.update();
-
-            //const pack_name = "Mount Beetle RG 01 ppack0.mcpack";
-            //const model_name = "models/entity/mount_beetle_rg_01";
-
-            const gui = new GUI();
-            gui.width += 150;
-            const params = {"model": null};
-            let mgui;
-            let mcpackLoadingManager;
+            let camera, scene, renderer, composer, controls;
 
             const scene_meshes = new THREE.Group();
-            scene.add(scene_meshes);
-            async function load_model(zipfile, model_name) {
+            async function load_entity(mcpackLoadingManager, entity_name) {
                 scene_meshes.clear();
                 mcpackLoadingManager.Load(function() {
-                    const loader = new LegendsModelLoader(mcpackLoadingManager);
-                    loader.load(model_name, function ( legend ) {
-                        for(const mesh of legend.meshes) {
-                            scene_meshes.add(mesh);
-                        }
+                    const loader = new LegendsEntityLoader(mcpackLoadingManager);
+                    loader.load(entity_name, function ( entity ) {
+                        window.entity = entity;
+                        scene_meshes.add(entity);
                     });
                 });
             }
 
+
+            const gui = new GUI();
+            gui.width += 150;
+            const params = {"entity": null};
+            let modelGui;
+
             async function load_blob(blob) {
                 const zr = new zip.ZipReader(new zip.BlobReader(blob));
                 const entries = await zr.getEntries();
-                const model_filenames = entries.filter(e => e.filename.startsWith("models/")).map(e => e.filename.split(".")[0]);
-                if(model_filenames.length == 0) {
+                const entity_filenames = entries.filter(e => e.filename.startsWith("entity/")).map(e => e.filename);
+                if(entity_filenames.length == 0) {
                     pop("This mcpack doesnt have any models!");
                     return;
                 }
 
-                mcpackLoadingManager = new ZipLoadingManager(zr);
-                params.model = model_filenames[0];
-                if(mgui) mgui.remove();
+                const mcpackLoadingManager = new ZipLoadingManager(zr);
+                params.entity = entity_filenames[0];
+                if(modelGui) modelGui.remove();
 
                 function onChange() {
-                    load_model(zr, params.model);
+                    load_entity(mcpackLoadingManager, params.entity);
                 }
 
-                mgui = gui.add( params, "model", model_filenames);
-                mgui.onChange(onChange);
+                modelGui = gui.add( params, "entity", entity_filenames);
+                modelGui.onChange(onChange);
                 onChange();
             }
 
@@ -121,59 +96,127 @@
                 await load_blob(await resp.blob());
             }
 
-            const pack_name = "Hero Ranger DL 02 ppack0.mcpack";
-            load_mcpack_file(pack_name);
 
-            // skybox
-            const cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256 );
-            const cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
-            const lightProbe = new THREE.LightProbe();
-            scene.add( lightProbe );
+            async function init() {
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
-            new THREE.CubeTextureLoader().load( [1,3,4,5,0,2].map(e => `panorama/panorama_${e}.png`), function ( cubeTexture ) {
+                // create renderer
+                renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                });
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                //renderer.outputEncoding = THREE.sRGBEncoding;
+                renderer.shadowMap.enabled = true;
+                document.body.appendChild( renderer.domElement );
+                
+                // drag & drop
+                renderer.domElement.addEventListener("dragover", (ev) => {
+                    ev.target.setAttribute("drop-active", true);
+                    ev.preventDefault();
+                });
+
+                renderer.domElement.addEventListener("dragleave", (ev) => {
+                    ev.target.setAttribute("drop-active", false);
+                    ev.preventDefault();
+                });
+
+                function drop(ev) {
+                    ev.preventDefault();
+                    ev.target.setAttribute("drop-active", false);
+                    const file = ev.dataTransfer.files[0];
+                    load_blob(file);
+                }
+                renderer.domElement.addEventListener("drop", drop);
+
+                composer = new EffectComposer( renderer );
+
+                const ssaoPass = new SSAOPass( scene, camera, window.innerWidth, window.innerHeight );
+                ssaoPass.kernelRadius = 16;
+                composer.addPass( ssaoPass );
+
+                const hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.8 );
+				hemiLight.color.setHSL( 0.6, 1, 0.6 );
+				hemiLight.groundColor.setHSL( 0.095, 1, 0.75 );
+				hemiLight.position.set( 0, 50, 0 );
+				scene.add( hemiLight );
+
+                const dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
+				dirLight.color.setHSL( 0.1, 1, 0.95 );
+				dirLight.position.set( - 1, 1.75, 1 );
+				dirLight.position.multiplyScalar( 30 );
+				scene.add( dirLight );
+
+				dirLight.castShadow = true;
+
+				dirLight.shadow.mapSize.width = 2048;
+				dirLight.shadow.mapSize.height = 2048;
+
+				const d = 50;
+
+				dirLight.shadow.camera.left = - d;
+				dirLight.shadow.camera.right = d;
+				dirLight.shadow.camera.top = d;
+				dirLight.shadow.camera.bottom = - d;
+
+				dirLight.shadow.camera.far = 3500;
+				dirLight.shadow.bias = - 0.0001;
+
+
+
+                // resize handler
+                window.addEventListener( 'resize', onWindowResize, false );
+                function onWindowResize(){
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize( window.innerWidth, window.innerHeight );
+                    composer.setSize( window.innerWidth, window.innerHeight );
+                }
+
+
+                // create controls
+                controls = new OrbitControls( camera, renderer.domElement );
+                camera.position.set( 0, 3, 4 );
+                controls.update();
+
+                // add group for loaded meshes
+                scene.add(scene_meshes);
+
+                // skybox
+                const cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256 );
+                const cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
+                const lightProbe = new THREE.LightProbe();
+                //scene.add( lightProbe );
+
+                const cubeTexture = await new THREE.CubeTextureLoader().loadAsync( [1,3,4,5,0,2].map(e => `panorama/panorama_${e}.png`));
                 scene.background = cubeTexture;
                 cubeCamera.update( renderer, scene );
                 lightProbe.copy( LightProbeGenerator.fromCubeRenderTarget( renderer, cubeRenderTarget ) );
-            } );
 
+
+                // load models when asked
+                window.addEventListener("message", (m) => {
+                    console.log(m.data);
+                    if(m.data.load_blob) {
+                        load_blob(m.data.load_blob);
+                    }
+                });
+
+                if(opener) {
+                    opener.postMessage("loaded");
+                } else {
+                    const pack_name = "Hero Ranger DL 02 ppack0.mcpack";
+                    load_mcpack_file(pack_name);
+                }
+            }
 
             function render() {
                 controls.update();
                 renderer.render( scene, camera );
+                requestAnimationFrame( render );
             }
 
-            window.addEventListener( 'resize', onWindowResize, false );
-            function onWindowResize(){
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize( window.innerWidth, window.innerHeight );
-            }
-
-
-            function drop(ev) {
-                ev.preventDefault();
-                ev.target.setAttribute("drop-active", false);
-                const file = ev.dataTransfer.files[0];
-                load_blob(file);
-            }
-            renderer.domElement.addEventListener("drop", drop);
-
-            window.addEventListener("message", (m) => {
-                console.log(m.data);
-                if(m.data.load_blob) {
-                    load_blob(m.data.load_blob);
-                }
-            })
-            if(opener) {
-                opener.postMessage("loaded");
-            }
-
-            function animate() {
-                requestAnimationFrame( animate );
-                render();
-            }
-            animate();
-
+            init().then(render);
         </script>
 	</body>
 </html>
