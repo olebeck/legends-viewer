@@ -43,13 +43,10 @@
 			import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
             import { GroundProjectedEnv } from 'three/addons/objects/GroundProjectedEnv.js';
 
-            import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-			import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
-
             import { ZipLoadingManager } from './ziploader.js';
             import { LegendsEntityLoader } from './loader.js';
 
-            let camera, scene, renderer, composer, controls;
+            let camera, scene, renderer, controls;
 
             const scene_meshes = new THREE.Group();
             async function load_entity(mcpackLoadingManager, entity_name) {
@@ -129,39 +126,12 @@
                 }
                 renderer.domElement.addEventListener("drop", drop);
 
-                composer = new EffectComposer( renderer );
-
-                const ssaoPass = new SSAOPass( scene, camera, window.innerWidth, window.innerHeight );
-                ssaoPass.kernelRadius = 16;
-                composer.addPass( ssaoPass );
-
-                const hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.8 );
-				hemiLight.color.setHSL( 0.6, 1, 0.6 );
-				hemiLight.groundColor.setHSL( 0.095, 1, 0.75 );
-				hemiLight.position.set( 0, 50, 0 );
-				scene.add( hemiLight );
 
                 const dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
 				dirLight.color.setHSL( 0.1, 1, 0.95 );
 				dirLight.position.set( - 1, 1.75, 1 );
 				dirLight.position.multiplyScalar( 30 );
 				scene.add( dirLight );
-
-				dirLight.castShadow = true;
-
-				dirLight.shadow.mapSize.width = 2048;
-				dirLight.shadow.mapSize.height = 2048;
-
-				const d = 50;
-
-				dirLight.shadow.camera.left = - d;
-				dirLight.shadow.camera.right = d;
-				dirLight.shadow.camera.top = d;
-				dirLight.shadow.camera.bottom = - d;
-
-				dirLight.shadow.camera.far = 3500;
-				dirLight.shadow.bias = - 0.0001;
-
 
 
                 // resize handler
@@ -170,7 +140,6 @@
                     camera.aspect = window.innerWidth / window.innerHeight;
                     camera.updateProjectionMatrix();
                     renderer.setSize( window.innerWidth, window.innerHeight );
-                    composer.setSize( window.innerWidth, window.innerHeight );
                 }
 
 
@@ -186,13 +155,13 @@
                 const cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256 );
                 const cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
                 const lightProbe = new THREE.LightProbe();
-                //scene.add( lightProbe );
+                scene.add( lightProbe );
 
-                const cubeTexture = await new THREE.CubeTextureLoader().loadAsync( [1,3,4,5,0,2].map(e => `panorama/panorama_${e}.png`));
-                scene.background = cubeTexture;
-                cubeCamera.update( renderer, scene );
-                lightProbe.copy( LightProbeGenerator.fromCubeRenderTarget( renderer, cubeRenderTarget ) );
-
+                new THREE.CubeTextureLoader().load( [1,3,4,5,0,2].map(e => `panorama/panorama_${e}.png`), (cubeTexture) => {
+                    scene.background = cubeTexture;
+                    cubeCamera.update( renderer, scene );
+                    lightProbe.copy( LightProbeGenerator.fromCubeRenderTarget( renderer, cubeRenderTarget ) );
+                });
 
                 // load models when asked
                 window.addEventListener("message", (m) => {
