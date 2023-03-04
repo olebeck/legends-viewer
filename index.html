@@ -41,7 +41,6 @@
             import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
             import { LightProbeHelper } from 'three/addons/helpers/LightProbeHelper.js';
 			import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
-            import { GroundProjectedEnv } from 'three/addons/objects/GroundProjectedEnv.js';
 
             import { ZipLoadingManager } from './ziploader.js';
             import { LegendsEntityLoader } from './loader.js';
@@ -103,8 +102,6 @@
                     antialias: true,
                 });
                 renderer.setSize( window.innerWidth, window.innerHeight );
-                //renderer.outputEncoding = THREE.sRGBEncoding;
-                renderer.shadowMap.enabled = true;
                 document.body.appendChild( renderer.domElement );
                 
                 // drag & drop

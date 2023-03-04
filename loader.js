@@ -152,6 +152,7 @@ export class LegendsModelLoader extends THREE.Loader {
             const uv = new Float32Array(jm.uv_sets[0].map(e => [e[0], 1-e[1]]).flat());
 
             geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+            // todo fix broken
 			//geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
             geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
             geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( vertices, 3 ) );
