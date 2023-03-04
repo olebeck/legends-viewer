@@ -5,12 +5,33 @@
 		<title>threejs Minecraft Legends Viewer</title>
 		<style>
 			body {
-                margin: 0; 
+                margin: 0;
+                padding: 0;
                 font-family: Arial, sans-serif;
             }
             *[drop-active=true] {
                 filter: blur(3px);
             }
+
+            #drag_drop_notify {
+                display: flex;
+                align-items: center;
+                position: absolute;
+                justify-content: center;
+                width: 100%;
+                height: 100%;
+                color: white;
+                font-size: 2rem;
+                user-select: none;
+                pointer-events: none
+            }
+
+            canvas {
+                position: absolute;
+                width: 100vw;
+                height: 100vh;
+            }
+
 		</style>
         <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
         <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
@@ -25,6 +46,8 @@
         </script>
 	</head>
 	<body>
+        <div id="renderer"></div>
+        <div id="drag_drop_notify">Drag & Drop an mcpack file containing models</div>
         <script src="zip.js"></script>
 		<script type="importmap">
 			{
@@ -44,6 +67,12 @@
 
             import { ZipLoadingManager } from './ziploader.js';
             import { LegendsEntityLoader } from './loader.js';
+
+
+            const DEBUG = false;
+
+            const drag_drop_notify = document.querySelector("#drag_drop_notify");
+
 
             let camera, scene, renderer, controls;
 
@@ -66,6 +95,8 @@
             let modelGui;
 
             async function load_blob(blob) {
+                drag_drop_notify.style.display = "none";
+
                 const zr = new zip.ZipReader(new zip.BlobReader(blob));
                 const entries = await zr.getEntries();
                 const entity_filenames = entries.filter(e => e.filename.startsWith("entity/")).map(e => e.filename);
@@ -97,12 +128,14 @@
                 scene = new THREE.Scene();
                 camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
+                const render_elem = document.querySelector("#renderer");
+
                 // create renderer
                 renderer = new THREE.WebGLRenderer({
                     antialias: true,
                 });
                 renderer.setSize( window.innerWidth, window.innerHeight );
-                document.body.appendChild( renderer.domElement );
+                render_elem.appendChild( renderer.domElement );
                 
                 // drag & drop
                 renderer.domElement.addEventListener("dragover", (ev) => {
@@ -170,9 +203,11 @@
 
                 if(opener) {
                     opener.postMessage("loaded");
-                } else {
+                } else if(DEBUG) {
                     const pack_name = "Hero Ranger DL 02 ppack0.mcpack";
                     load_mcpack_file(pack_name);
+                } else {
+                    drag_drop_notify.style.display = "";
                 }
             }
 
