@@ -12,6 +12,7 @@ class LegendsMaterialLoader extends THREE.Loader {
     }
 
     shader_face_poses(shader, height) {
+        // SUPER hacky
         let x = 1, y = 1;
         switch (this.face_poses.length) {
             case 18:
@@ -155,7 +156,6 @@ export class LegendsModelLoader extends THREE.Loader {
             // todo fix broken
 			//geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
             geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
-            geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( vertices, 3 ) );
             geometry.setIndex(jm.triangles);
             geometry.computeVertexNormals();
 
