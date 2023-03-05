@@ -164,6 +164,7 @@ export class LegendsModelLoader extends THREE.Loader {
         let skinWeights = [];
 
         const skinnedMesh = new THREE.SkinnedMesh(geometry, materials);
+        geometries[0].meshes.sort(e =>  e.meta_material);
         for(const jm of geometries[0].meshes) {
             const new_group_start = indicies.length;
             
@@ -176,11 +177,14 @@ export class LegendsModelLoader extends THREE.Loader {
 
             const material_i = material_indicies[jm.meta_material];
             const last_group = geometry.groups.at(-1);
-            if(last_group?.materialIndex != material_i) {
+            const new_material = last_group?.materialIndex != material_i;
+            if(new_material) {
                 if(last_group) {
                     last_group.count = new_group_start - last_group.start;
                 }
                 geometry.addGroup(new_group_start, indicies.length - new_group_start, material_i);
+            } else if(last_group) {
+                last_group.count = indicies.length - last_group.start;
             }
         }
 
