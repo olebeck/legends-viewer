@@ -69,10 +69,9 @@
             import { LegendsEntityLoader } from './loader.js';
 
 
-            const DEBUG = false;
+            const DEBUG = true;
 
             const drag_drop_notify = document.querySelector("#drag_drop_notify");
-
 
             let camera, scene, renderer, controls;
 
@@ -84,6 +83,10 @@
                     loader.load(entity_name, function ( entity ) {
                         window.entity = entity;
                         scene_meshes.add(entity);
+
+                        const helper = new THREE.SkeletonHelper( entity.children[0] );
+                        scene.add( helper );
+
                     });
                 });
             }
@@ -126,6 +129,7 @@
 
             async function init() {
                 scene = new THREE.Scene();
+                window.scene = scene;
                 camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
                 const render_elem = document.querySelector("#renderer");

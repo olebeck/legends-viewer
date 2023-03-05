@@ -56,6 +56,7 @@ class LegendsMaterialLoader extends THREE.Loader {
                 side: THREE.DoubleSide,
                 transparent: true,
                 alphaTest: 0.0001,
+                name: name,
             });
 
             let height = 0;
@@ -132,48 +133,68 @@ export class LegendsModelLoader extends THREE.Loader {
     }
 
     parse( data ) {
-        const scope = this;
-
         if(!this.materialLoader) {
             this.materialLoader = new LegendsMaterialLoader( this.manager );
             this.materialLoader.setPath( this.path );
         }
 
-        const ret = [];
-
         const json = JSON.parse( data );
         const geometries = json["minecraft:geometry"];
-        window.geometry = geometries;
 
+        const materials = [];
+        const material_indicies = {};
         for(const jm of geometries[0].meshes) {
-            const geometry = new THREE.BufferGeometry();
-
-            const vertices = jm.positions.flat();
-            const normals = jm.normal_sets[0].flat();
-            const uv = new Float32Array(jm.uv_sets[0].map(e => [e[0], 1-e[1]]).flat());
-
-            geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
-            // todo fix broken
-			//geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
-            geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
-            geometry.setIndex(jm.triangles);
-            geometry.computeVertexNormals();
-
-            const mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }) );
-
-            if(this.materials.has(jm.meta_material)) {
-                mesh.material = this.materials.get(jm.meta_material);
-            } else {
-                this.materialLoader.load(`materials/meta_materials/${jm.meta_material}.json`, function (material) {
-                    scope.materials.set(jm.meta_material, material);
-                    mesh.material = material;
-                });
-            }
-
-            ret.push(mesh);
+            material_indicies[jm.meta_material] = jm;
+        }
+        for(const key of Object.keys(material_indicies)) {
+            const jm = material_indicies[key];
+            const i = materials.push(null)-1;
+            material_indicies[key] = i;
+            this.materialLoader.load(`materials/meta_materials/${jm.meta_material}.json`, function (material) {
+                materials[i] = material;
+            });
         }
 
-        return ret;
+        const geometry = new THREE.BufferGeometry();
+        let indicies = [];
+        let vertices = [];
+        let normals = [];
+        let uv = [];
+        let skinIndices = [];
+        let skinWeights = [];
+
+        const skinnedMesh = new THREE.SkinnedMesh(geometry, materials);
+        for(const jm of geometries[0].meshes) {
+            const new_group_start = indicies.length;
+            
+            indicies = indicies.concat(...jm.triangles.map(i => (vertices.length/3)+i));
+            vertices = vertices.concat(...jm.positions.flat());
+            normals = normals.concat(...jm.normal_sets[0]);
+            uv = uv.concat(...jm.uv_sets[0].map(e => [e[0], 1-e[1]]).flat());
+            skinIndices = skinIndices.concat(...[0,0,0,0]); // TODO!
+            skinWeights = skinWeights.concat(...jm.weights.map(weight => [0,0,0,0].map((_,i) => weight[i] ?? 0)));
+
+            const material_i = material_indicies[jm.meta_material];
+            const last_group = geometry.groups.at(-1);
+            if(last_group?.materialIndex != material_i) {
+                if(last_group) {
+                    last_group.count = new_group_start - last_group.start;
+                }
+                geometry.addGroup(new_group_start, indicies.length - new_group_start, material_i);
+            }
+        }
+
+        geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+        geometry.setAttribute( 'skinIndex', new THREE.Uint16BufferAttribute( skinIndices, 4 ) );
+        geometry.setAttribute( 'skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
+        geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 4 ) );
+        geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
+        geometry.setIndex(indicies);
+        geometry.computeVertexNormals();
+
+        const skeleton = new THREE.Skeleton( [new THREE.Bone()] );
+        skinnedMesh.bind(skeleton);
+        return skinnedMesh;
     }
 }
 
@@ -182,9 +203,7 @@ class LegendsEntity extends THREE.Object3D {
     constructor(json, model) {
         super();
         this.json = json;
-        for(const mesh of model) {
-            this.add(mesh);
-        }
+        this.add(model);
     }
 }
 
