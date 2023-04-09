@@ -5,9 +5,10 @@ export class ZipLoadingManager extends THREE.LoadingManager {
         super();
         this.zr = zr;
         this.setURLModifier((url) => {
-            const e = this.entries.get(url);
-            if(!e) return `${url} not found`;
-            return e;
+            if(!this.entries.has(url)) {
+                return `${url} not found`;
+            }
+            return this.entries.get(url);
         });
     }
 

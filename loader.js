@@ -29,12 +29,22 @@ class LegendsMaterialLoader extends THREE.Loader {
         shader.vertexShader = shader.vertexShader.replace(
             '#include <uv_vertex>',
             `
+            vec2 a = vec2(${x},${y});
                 #include <uv_vertex>
                 #ifdef USE_UV
-                vUv /= vec2(${x},${y});
+                vUv /= a;
+                #endif
+
+                #ifdef USE_MAP
+                vMapUv /= a;
+                #endif
+
+                #ifdef USE_NORMALMAP
+                vNormalMapUv /= a;
                 #endif
             `
         )
+        console.log(shader.vertexShader)
     }
 
     load(filename, onLoad, onProgress, onError) {
@@ -163,7 +173,7 @@ export class LegendsModelLoader extends THREE.Loader {
         let skinIndices = [];
         let skinWeights = [];
 
-        const skinnedMesh = new THREE.SkinnedMesh(geometry, materials);
+        const mesh = new THREE.Mesh(geometry, materials);
         geometries[0].meshes.sort(e =>  e.meta_material);
         for(const jm of geometries[0].meshes) {
             const new_group_start = indicies.length;
@@ -195,10 +205,7 @@ export class LegendsModelLoader extends THREE.Loader {
         geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uv, 2 ) );
         geometry.setIndex(indicies);
         geometry.computeVertexNormals();
-
-        const skeleton = new THREE.Skeleton( [new THREE.Bone()] );
-        skinnedMesh.bind(skeleton);
-        return skinnedMesh;
+        return mesh;
     }
 }
 

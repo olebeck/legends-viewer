@@ -67,9 +67,6 @@
             import { ZipLoadingManager } from './ziploader.js';
             import { LegendsEntityLoader } from './loader.js';
 
-
-            const DEBUG = false;
-
             const drag_drop_notify = document.querySelector("#drag_drop_notify");
 
             let camera, scene, renderer, controls;
@@ -159,30 +156,28 @@
                 }
                 renderer.domElement.addEventListener("drop", drop);
 
-
-                const dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
-				dirLight.color.setHSL( 0.1, 1, 0.95 );
-				dirLight.position.set( - 1, 1.75, 1 );
-				dirLight.position.multiplyScalar( 30 );
-				scene.add( dirLight );
-
-
                 // resize handler
                 window.addEventListener( 'resize', onWindowResize, false );
                 function onWindowResize(){
-                    camera.aspect = window.innerWidth / window.innerHeight;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize( window.innerWidth, window.innerHeight );
-                }
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
 
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+
+                    renderer.setSize( width, height );
+                }
 
                 // create controls
                 controls = new OrbitControls( camera, renderer.domElement );
                 camera.position.set( 0, 3, 4 );
                 controls.update();
 
-                // add group for loaded meshes
-                scene.add(scene_meshes);
+                const dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
+				dirLight.color.setHSL( 0.1, 1, 0.95 );
+				dirLight.position.set( - 1, 1.75, 1 );
+				dirLight.position.multiplyScalar( 30 );
+				scene.add( dirLight );
 
                 // skybox
                 const cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256 );
@@ -196,6 +191,9 @@
                     lightProbe.copy( LightProbeGenerator.fromCubeRenderTarget( renderer, cubeRenderTarget ) );
                 });
 
+                // add group for loaded meshes
+                scene.add(scene_meshes);
+
                 // load models when asked
                 window.addEventListener("message", (m) => {
                     console.log(m.data);
@@ -203,6 +201,9 @@
                         load_blob(m.data.load_blob);
                     }
                 });
+
+
+                const DEBUG = false;
 
                 if(opener) {
                     opener.postMessage("loaded");
