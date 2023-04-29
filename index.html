@@ -134,6 +134,8 @@
                 renderer = new THREE.WebGLRenderer({
                     antialias: true,
                 });
+                renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+                window.renderer = renderer;
                 renderer.setSize( window.innerWidth, window.innerHeight );
                 render_elem.appendChild( renderer.domElement );
                 
