@@ -134,7 +134,7 @@
                 renderer = new THREE.WebGLRenderer({
                     antialias: true,
                 });
-                renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+                renderer.outputColorSpace = THREE.SRGBColorSpace;
                 window.renderer = renderer;
                 renderer.setSize( window.innerWidth, window.innerHeight );
                 render_elem.appendChild( renderer.domElement );
@@ -206,9 +206,10 @@
 
 
                 const DEBUG = false;
+                const parent = opener || window.parent;
 
-                if(opener) {
-                    opener.postMessage("loaded");
+                if(parent) {
+                    parent.postMessage("loaded");
                 } else if(DEBUG) {
                     const pack_name = "Hero Ranger DL 02 ppack0.mcpack";
                     load_mcpack_file(pack_name);
